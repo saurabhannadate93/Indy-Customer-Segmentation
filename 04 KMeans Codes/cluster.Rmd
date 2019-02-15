@@ -1,0 +1,120 @@
+---
+title: "cluster"
+author: "Tian Fu"
+date: "1/22/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(dplyr)
+```
+
+```{r}
+features <- read.csv("features.csv",header=T)
+```
+
+```{r}
+# drop absolute value variables for content and section for now
+drops <- c("home","sports","news","life","entertainment","tech","weather","opinion","travel","money","search","gallery","homefront","section.front","story","sub.section")
+features <- features[, !(names(features) %in% drops)]
+```
+
+```{r}
+set.seed(12345)
+# select variables
+selected <- c("pct_home","pct_sports","pct_news","pct_life","pct_entertainment")
+f1 <- features[,selected]
+```
+
+```{r}
+i = 1
+diff_ncluster = c(2,3,4,5,6)
+withinss <- vector(mode = 'numeric', length = length(diff_ncluster))
+inbess <- vector(mode = 'numeric', length = length(diff_ncluster))
+for (K in diff_ncluster){
+  km <- kmeans(f1, centers = K, nstart = 20)
+  withinss[i] <- km$tot.withinss
+  inbess[i] <- km$betweenss
+  i = i+1
+}
+plot(diff_ncluster, withinss, type = 'b', xlab = '#clusters', ylab = '', ylim = c(0,max(inbess)), col = 'red')
+lines(diff_ncluster, inbess, type = 'b', col = 'blue')
+legend("center", legend=c("withinss", "betweenss"),
+       col=c("red", "blue"), lty = 1, cex=1)
+```
+
+
+# model first try
+```{r}
+# k means
+km1 <- kmeans(f1, centers = 7, nstart = 20)
+```
+
+```{r}
+summary.kmeans = function(fit)
+{
+  p = ncol(fit$centers)
+  k = nrow(fit$centers)
+  n = sum(fit$size)
+  sse = sum(fit$withinss)
+  xbar = t(fit$centers)%*%fit$size/n
+  ssb = sum(fit$size*(fit$centers - rep(1,k) %*% t(xbar))^2)
+  print(data.frame(
+    n=c(fit$size, n),
+    Pct=(round(c(fit$size, n)/n,2)),
+    round(rbind(fit$centers, t(xbar)), 2),
+    RMSE = round(sqrt(c(fit$withinss/(p*fit$size-1), sse/(p*(n-k)))), 4)
+  ))
+  cat("SSE = ", sse, "; SSB = ", ssb, "\n")
+  cat("R-Squared = ", ssb/(ssb+sse), "\n")
+  cat("Pseudo F = ", (ssb/(k-1))/(sse/(n-k)), "\n\n");
+  invisible(list(sse=sse, ssb=ssb, Rsqr=ssb/(ssb+sse), F=(ssb/(k-1))/(sse/(n-k))))
+}
+```
+
+```{r}
+# k means
+km1 <- kmeans(f1, centers = 6, nstart = 20)
+summary(km1)
+```
+
+```{r}
+plot.kmeans = function(fit,boxplot=F)
+{
+  require(lattice)
+  p = ncol(fit$centers)
+  k = nrow(fit$centers)
+  plotdat = data.frame(
+    mu=as.vector(fit$centers),
+    clus=factor(rep(1:k, p)),
+    var=factor( 0:(p*k-1) %/% k, labels=colnames(fit$centers))
+  )
+print(dotplot(var~mu|clus, data=plotdat,
+  panel=function(...){
+    panel.dotplot(...)
+    panel.abline(v=0, lwd=.1)
+  },
+  layout=c(k,1),
+  xlab="Cluster Mean"
+))
+invisible(plotdat)
+}
+```
+
+```{r}
+plot(km1)
+```
+
+# cluster for each obs
+```{r}
+cluster <- km1$cluster
+c <- as.data.frame(cbind(features$fire_fly_id,cluster))
+names(c)[names(c)=="V1"] <- "fire_fly_id"
+write.csv(c,"cluster_by_section.csv",row.names = F)
+```
+

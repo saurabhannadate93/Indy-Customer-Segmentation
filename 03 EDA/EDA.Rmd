@@ -1,0 +1,112 @@
+---
+title: "EDA"
+author: "Saurabh Annadate"
+date: "1/18/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Loading libraries and Reading in the data
+```{r}
+rm(list=ls())
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(scales)
+
+nw_data <- read.csv('../02\ Data/web.csv',stringsAsFactors = FALSE)
+nw_data$event_date <- ymd(nw_data$event_date)
+nw_data$fire_fly_id <- as.character(nw_data$fire_fly_id)
+
+nw_data$content_type <- as.factor(nw_data$content_type)
+nw_data$section <- as.factor(nw_data$section)
+nw_data$sub_section <- as.factor(nw_data$sub_section)
+nw_data$topic <- as.factor(nw_data$topic)
+
+nw_data$referrer_type_value <- as.factor(nw_data$referrer_type_value)
+nw_data$browser_value <- as.factor(nw_data$browser_value)
+```
+
+#Summarizing the data
+
+```{r}
+
+#Checking row count
+paste('The row count of the input data is:',dim(nw_data)[1])
+
+#Checking the variable information
+str(nw_data)
+
+#Counting the number of unique customers
+dim(nw_data %>% group_by(fire_fly_id) %>% summarise(row_count = n(), visit_num_tot=sum(visit_num), page_views_tot=sum(page_views)))[1]
+
+```
+
+#Looking at visits and views informations
+```{r}
+
+#Average number of visits and views per customer
+nw_data2 <- nw_data %>% group_by(fire_fly_id) %>% summarise(tot_visit = n_distinct(visit_num), tot_page_views=sum(page_views)) %>% mutate(page_views_per_visit = tot_page_views/tot_visit)
+
+
+#Quantiles, Scatterplot and histogram of visits made by a customer
+temp_vec <- nw_data %>% group_by(fire_fly_id) %>% summarise(tot_visit = n_distinct(visit_num)) %>% select(tot_visit)
+
+quantile(temp_vec$tot_visit,probs = c(0,0.01,0.05,0.1,0.25,0.5,0.75,0.9,0.95,0.99,1))
+
+nw_data2 %>% ggplot(.,aes(x=seq_along(tot_visit), y=tot_visit)) + geom_point() + xlab('Observation #') + ylab('Total number of visits') + ggtitle('Scatter Plot of the total visits per customer') + theme(plot.title=element_text(hjust=0.5))
+
+nw_data2 %>% filter(tot_visit <= 500) %>% ggplot(.,aes(x=tot_visit)) + geom_histogram(binwidth = 10) + xlab('Total visits') + ylab('Number of customers') + ggtitle('Histogram Plot of the total visits per customer') + theme(plot.title=element_text(hjust=0.5))
+
+# Since the variables are highly rightly skewed, we will take log
+nw_data2$tot_visit <- log(nw_data2$tot_visit)
+
+nw_data2 %>% ggplot(.,aes(x=seq_along(tot_visit), y=tot_visit)) + geom_point() + xlab('Observation #') + ylab('Total number of visits') + ggtitle('Scatter Plot of log of total visits per customer') + theme(plot.title=element_text(hjust=0.5))
+
+nw_data2%>% ggplot(.,aes(x=tot_visit)) + geom_histogram(binwidth = 1) + xlab('Total visits') + ylab('Number of customers') + ggtitle('Histogram Plot of log of total visits per customer') + theme(plot.title=element_text(hjust=0.5))
+
+
+#Quantiles, Scatterplot and histogram of page views made by a customer
+temp_vec <- nw_data %>% group_by(fire_fly_id) %>% summarise(tot_page_views = sum(page_views)) %>% select(tot_page_views)
+
+quantile(temp_vec$tot_page_views,probs = c(0,0.01,0.05,0.1,0.25,0.5,0.75,0.9,0.95,0.99,1))
+
+nw_data %>% group_by(fire_fly_id) %>% summarise(tot_page_views = sum(page_views)) %>% ggplot(.,aes(x=seq_along(tot_page_views), y=tot_page_views)) + geom_point() + xlab('Observation #') + ylab('Total number of page viwes') + ggtitle('Scatter Plot of the total page views per customer') + theme(plot.title=element_text(hjust=0.5))
+
+nw_data %>% group_by(fire_fly_id) %>% summarise(tot_page_views = sum(page_views)) %>% filter(tot_page_views <= 5000) %>% ggplot(.,aes(x=tot_page_views)) + geom_histogram(binwidth = 100) + xlab('Observation #') + ylab('Total number of page views') + ggtitle('Histogram Plot of the total page views per customer') + theme(plot.title=element_text(hjust=0.5))
+
+# Since the variables are highly rightly skewed, we will take log
+nw_data2$tot_page_views <- log(nw_data2$tot_page_views)
+
+nw_data2 %>% ggplot(.,aes(x=seq_along(tot_page_views), y=tot_page_views)) + geom_point() + xlab('Observation #') + ylab('Total number of page viwes') + ggtitle('Scatter Plot of log of total page views per customer') + theme(plot.title=element_text(hjust=0.5))
+
+nw_data2 %>% ggplot(.,aes(x=tot_page_views)) + geom_histogram(binwidth = 1) + xlab('Observation #') + ylab('Total number of page views') + ggtitle('Histogram Plot of log of total page views per customer') + theme(plot.title=element_text(hjust=0.5))
+
+
+#Quantiles, Scatterplot and histogram of page views / visit made by a customer
+temp_vec <- nw_data %>% group_by(fire_fly_id) %>% summarise(tot_visit = n_distinct(visit_num), tot_page_views = sum(page_views)) %>% mutate(page_views_per_visit = tot_page_views/tot_visit)  %>% select(page_views_per_visit)
+
+quantile(temp_vec$page_views_per_visit,probs = c(0,0.01,0.05,0.1,0.25,0.5,0.75,0.9,0.95,0.99,1))
+
+nw_data2 %>% ggplot(.,aes(x=seq_along(page_views_per_visit), y=page_views_per_visit)) + geom_point() + xlab('Observation #') + ylab('Total number of page views per visit') + ggtitle('Scatter Plot of the total page views per visit per customer') + theme(plot.title=element_text(hjust=0.5))
+
+nw_data2 %>% filter(page_views_per_visit < 1000) %>% ggplot(.,aes(x=page_views_per_visit)) + geom_histogram(binwidth = 10) + xlab('Observation #') + ylab('Total number of page views per visit') + ggtitle('Histogram Plot of the total page views per visit per customer') + theme(plot.title=element_text(hjust=0.5))
+
+
+# Since the variables are highly rightly skewed, we will take log
+nw_data2$page_views_per_visit <- log(nw_data2$page_views_per_visit)
+
+
+nw_data2 %>% ggplot(.,aes(x=seq_along(page_views_per_visit), y=page_views_per_visit)) + geom_point() + xlab('Observation #') + ylab('Log of Total number of page views per visit') + ggtitle('Scatter Plot of the total page views per visit per customer') + theme(plot.title=element_text(hjust=0.5))
+
+nw_data2 %>% ggplot(.,aes(x=page_views_per_visit)) + geom_histogram(binwidth = 1) + xlab('Observation #') + ylab('Log of Total number of page views per visit') + ggtitle('Histogram Plot of the total page views per visit per customer') + theme(plot.title=element_text(hjust=0.5))
+
+```
+
+#Extracting the data
+```{r}
+write.csv(nw_data2, "Variables_SA.csv")
+```
+

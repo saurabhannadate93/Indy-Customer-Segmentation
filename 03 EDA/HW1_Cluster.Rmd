@@ -1,0 +1,191 @@
+---
+title: "HW1_Cluster"
+author: "Tian Fu"
+date: "1/19/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(dplyr)
+library(tidyverse)
+```
+
+```{r}
+web <- read.csv("web.csv",header=T,na.strings=c(""," ","NA"))
+```
+
+```{r}
+# format event_date
+web$event_date <- as.Date(as.character(web$event_date))
+```
+
+# 1
+```{r}
+summary(web)
+```
+1) ?visit_num
+2) zip contains both numeric zip codes and combinatin of numbers and letters
+3) 0 as zip code
+
+# 2
+## content_type
+```{r}
+# categorize NA in content_type as Other
+web$content_type <- as.character(web$content_type)
+web[is.na(web$content_type),]$content_type <- "Other"
+
+# load mapping for 64 content_types
+content <- read.csv("content.csv",header=T)
+# update content_type in web
+web <- merge(web, content, by.x = "content_type", by.y = "content_type")
+web$content_type_new <- as.character(web$content_type_new)
+
+# find out top new grouped content based on total number of pageviews
+content <- web%>%
+  group_by(content_type_new) %>%
+  summarise(tot = sum(page_views)) %>%
+  select(content_type_new, tot)
+content <- data.frame(content)
+content$content_type_new <- as.character(content$content_type_new)
+content <- content[order(content$tot, decreasing=T),]
+# top content types
+top_content <- head(content$content_type_new,5)
+
+# code content_type_new other than top 11 as Other
+web[!(web$content_type_new %in% top_content),]$content_type_new <- "Other"
+
+# number of pageviews by content (6 new types)
+cont <- web %>%
+  group_by(fire_fly_id,content_type_new) %>%
+  summarise(tot_page_view = sum(page_views)) %>%
+  spread(content_type_new, tot_page_view)
+cont <- data.frame(cont)
+# fill NA with 0 - these people didnt view those types of content
+cont[is.na(cont)] <- 0
+
+# find percentages of pageviews in each type
+cont$total <- apply(cont[,-1],1,FUN=sum)
+cont$pct_Other <- cont$Other/cont$total
+cont$gallery <- cont$gallery/cont$total
+cont$pct_homefront <- cont$homefront/cont$total
+cont$`pct_section.front` <- cont$`section.front`/cont$total
+cont$pct_story <- cont$story/cont$total
+cont$`pct_sub.section` <- cont$`sub.section`/cont$total
+
+# remove unnecessary column
+cont <- cont[,-8]
+```
+
+## section
+```{r}
+web$section <- as.character(web$section)
+# number of pageviews by section
+sec <- web %>%
+  group_by(section) %>%
+  summarise(tot_page_view = sum(page_views)) %>%
+  select(section,tot_page_view)
+sec <- data.frame(sec)
+sec <- sec[order(sec$tot, decreasing=T),]
+# top 5 sections with most pageviews
+top_section <- head(sec$section,5)
+# besides top 5 sections, we also select sections we think that attract people
+trending <- c(top_section,"tech","weather","opinion","travel","money","search")
+
+# number of pageviews by section for each subscriber
+sec2 <- web %>%
+  group_by(fire_fly_id,section) %>%
+  summarise(tot_page_view = sum(page_views)) %>%
+  spread(section, tot_page_view)
+sec2 <- data.frame(sec2)
+# replace NA with 0 - this subscriber didnt read this particular section
+sec2[is.na(sec2)] <- 0
+# aggregate total pageviews for each subscriber
+sec2$total <- apply(sec2[,-1],1,FUN=sum)
+# keep only trending sections
+sec2 <- sec2[,c("fire_fly_id","total",trending)]
+
+# calculate percentages
+sec2$pct_home <- sec2$home/sec2$total
+sec2$pct_sports <- sec2$sports/sec2$total
+sec2$pct_news <- sec2$news/sec2$total
+sec2$pct_life <- sec2$life/sec2$total
+sec2$pct_entertainment <- sec2$entertainment/sec2$total
+sec2$pct_tech <- sec2$tech/sec2$total
+sec2$pct_weather <- sec2$weather/sec2$total
+sec2$pct_opinion <- sec2$opinion/sec2$total
+sec2$pct_travel <- sec2$travel/sec2$total
+sec2$pct_money <- sec2$money/sec2$total
+sec2$pct_search <- sec2$search/sec2$total
+# remove unnecessary column
+sec2 <- sec2[,-2]
+```
+
+```{r}
+# final table displaying features for each subscriber
+feature <- merge(sec2, cont, by="fire_fly_id")
+
+# save file
+write.csv(feature,"Variables_TF.csv")
+```
+
+```{r}
+# number of pageviews by section
+sec <- web %>%
+  group_by(fire_fly_id,section) %>%
+  summarise(tot_page_view = sum(page_views)) %>%
+  spread(section, tot_page_view)
+sec <- data.frame(sec)
+sec[is.na(sec)] <- 0
+```
+
+
+```{r}
+# total number of pageviews
+tot_pv <- web %>%
+  group_by(fire_fly_id) %>%
+  summarise(n=sum(page_views))
+tot_pv <- data.frame(tot_pv)
+```
+
+```{r}
+# number of times for each referral source
+ref <- web %>%
+  group_by(fire_fly_id,referrer_type_value) %>%
+  summarise(count = n()) %>%
+  spread(referrer_type_value, count)
+ref <- data.frame(ref)
+ref[is.na(ref)] <- 0
+```
+```{r}
+feature <- merge(feature,ref,by="fire_fly_id")
+```
+```{r}
+# min, max event_date - indicate tof and most recent visit
+date <- web %>%
+  group_by(fire_fly_id) %>%
+  summarise(first_visit = min(event_date), last_visit = max(event_date))
+date <- data.frame(date)
+feature <- merge(feature,date,by="fire_fly_id")
+```
+```{r}
+# number of pageviews by content
+cont <- web %>%
+  group_by(fire_fly_id,content_type) %>%
+  summarise(content_pageview = sum(page_views)) %>%
+  spread(content_type, content_pageview)
+cont <- data.frame(cont)
+cont[is.na(cont)] <- 0
+feature <- merge(feature,cont,by="fire_fly_id")
+```
+
+```{r}
+#km <- kmeans(feature, centers = 8, nstart = 20)
+```
+
+```{r}
+#km$withinss
+```
+
